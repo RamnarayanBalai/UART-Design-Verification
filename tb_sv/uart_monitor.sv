@@ -27,7 +27,7 @@ class uart_monitor;
             end
 
             data = 0;
-            for (int i = 0; i < cfg.wls; i++) begin
+            for (int i = 0; i < 8; i++) begin
                 #(bit_period);
                 if (is_tx)
                     data[i] = vif.TXD;
@@ -35,11 +35,8 @@ class uart_monitor;
                     data[i] = vif.RXD;
             end
 
-            if (cfg.pen) begin
-                #(bit_period);
-            end
-
-            #(bit_period);
+            #(bit_period); // Skip Parity bit
+            #(bit_period); // Skip Stop bit
             mon2sb.put(data);
         end
     endtask

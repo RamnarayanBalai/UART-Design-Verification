@@ -17,10 +17,6 @@ module apb_uart (
 
     // Divisor and control configurations
     logic [15:0] divisor;
-    logic [1:0]  cfg_wls;
-    logic        cfg_stb;
-    logic        cfg_pen;
-    logic        cfg_eps;
     logic        cfg_bc;
 
     // Engine control connections
@@ -63,10 +59,6 @@ module apb_uart (
         .bclk_en(bclk_en),
         .tx_data(tx_data),
         .tx_start(tx_start),
-        .cfg_wls(cfg_wls),
-        .cfg_stb(cfg_stb),
-        .cfg_pen(cfg_pen),
-        .cfg_eps(cfg_eps),
         .cfg_bc(cfg_bc),
         .txd(TXD),
         .tx_busy(tx_busy),
@@ -78,9 +70,6 @@ module apb_uart (
         .rst_n(PRESETn),
         .bclk_en(bclk_en),
         .rxd(RXD),
-        .cfg_wls(cfg_wls),
-        .cfg_pen(cfg_pen),
-        .cfg_eps(cfg_eps),
         .rx_data(rx_data),
         .rx_valid(rx_valid),
         .err_pe(rx_err_pe),
@@ -97,10 +86,6 @@ module apb_uart (
         .reg_wdata(PWDATA[7:0]),
         .reg_rdata(reg_rdata),
         .divisor(divisor),
-        .cfg_wls(cfg_wls),
-        .cfg_stb(cfg_stb),
-        .cfg_pen(cfg_pen),
-        .cfg_eps(cfg_eps),
         .cfg_bc(cfg_bc),
         .bclk_en(bclk_en),
         .tx_data(tx_data),

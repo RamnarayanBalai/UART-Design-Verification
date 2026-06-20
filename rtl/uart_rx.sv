@@ -3,9 +3,6 @@ module uart_rx (
     input  logic       rst_n,
     input  logic       bclk_en,
     input  logic       rxd,
-    input  logic [1:0] cfg_wls,
-    input  logic       cfg_pen,
-    input  logic       cfg_eps,
     output logic [7:0] rx_data,
     output logic       rx_valid,
     output logic       err_pe,
@@ -49,42 +46,11 @@ module uart_rx (
     logic       rx_parity_bit;
     logic       rx_stop_bit;
     
-    logic [2:0] max_bit_index;
-    logic       expected_parity;
+    localparam logic [2:0] max_bit_index = 3'd7;
+    logic expected_parity;
 
-    always_comb begin
-        case (cfg_wls)
-            2'b00:   max_bit_index = 3'd4;
-            2'b01:   max_bit_index = 3'd5;
-            2'b10:   max_bit_index = 3'd6;
-            default: max_bit_index = 3'd7;
-        endcase
-    end
-
-    always_comb begin
-        logic temp_parity;
-        case (cfg_wls)
-            2'b00:   temp_parity = ^shift_reg[4:0];
-            2'b01:   temp_parity = ^shift_reg[5:0];
-            2'b10:   temp_parity = ^shift_reg[6:0];
-            default: temp_parity = ^shift_reg[7:0];
-        endcase
-        
-        if (cfg_eps) begin
-            expected_parity = temp_parity;
-        end else begin
-            expected_parity = ~temp_parity;
-        end
-    end
-
-    always_comb begin
-        case (cfg_wls)
-            2'b00:   rx_data = {3'b000, shift_reg[4:0]};
-            2'b01:   rx_data = {2'b00,  shift_reg[5:0]};
-            2'b10:   rx_data = {1'b0,   shift_reg[6:0]};
-            default: rx_data = shift_reg;
-        endcase
-    end
+    assign expected_parity = ^shift_reg;
+    assign rx_data         = shift_reg;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -130,11 +96,7 @@ module uart_rx (
                             bclk_count           <= 4'd0;
                             shift_reg[bit_count] <= rxd_sync;
                             if (bit_count == max_bit_index) begin
-                                if (cfg_pen) begin
-                                    state <= ST_PARITY;
-                                end else begin
-                                    state <= ST_STOP;
-                                end
+                                state <= ST_PARITY;
                             end else begin
                                 bit_count <= bit_count + 3'd1;
                             end
@@ -171,20 +133,9 @@ module uart_rx (
                 ST_VALID: begin
                     rx_valid <= 1'b1;
                     err_fe   <= ~rx_stop_bit;
-
-                    if (cfg_pen) begin
-                        err_pe <= (rx_parity_bit !== expected_parity);
-                    end else begin
-                        err_pe <= 1'b0;
-                    end
-
-                    if (cfg_pen) begin
-                        err_bi <= (rx_data == 8'd0) && (rx_parity_bit == 1'b0) && (rx_stop_bit == 1'b0);
-                    end else begin
-                        err_bi <= (rx_data == 8'd0) && (rx_stop_bit == 1'b0);
-                    end
-
-                    state <= ST_IDLE;
+                    err_pe   <= (rx_parity_bit !== expected_parity);
+                    err_bi   <= (rx_data == 8'd0) && (rx_parity_bit == 1'b0) && (rx_stop_bit == 1'b0);
+                    state    <= ST_IDLE;
                 end
 
                 default: state <= ST_IDLE;

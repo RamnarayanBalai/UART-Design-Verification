@@ -12,10 +12,6 @@ module uart_regs (
 
     // Divisor and config outputs to engines
     output logic [15:0] divisor,
-    output logic [1:0]  cfg_wls,
-    output logic        cfg_stb,
-    output logic        cfg_pen,
-    output logic        cfg_eps,
     output logic        cfg_bc,
 
     // Engine Interfaces
@@ -39,10 +35,6 @@ module uart_regs (
     logic [7:0] DLH;
 
     assign divisor = {DLH, DLL};
-    assign cfg_wls = LCR[1:0];
-    assign cfg_stb = LCR[2];
-    assign cfg_pen = LCR[3];
-    assign cfg_eps = LCR[4];
     assign cfg_bc  = LCR[6];
 
     // FIFO Instantiations

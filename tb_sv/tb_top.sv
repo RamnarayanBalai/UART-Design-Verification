@@ -82,16 +82,17 @@ module tb_top;
 
     // APB Write Helper Task
     task automatic apb_write(input logic [4:0] addr, input logic [7:0] data);
-        @(posedge PCLK);
-        apb_if.PADDR   = addr;
-        apb_if.PWRITE  = 1;
-        apb_if.PSEL    = 1;
-        apb_if.PWDATA  = {24'd0, data};
-        @(posedge PCLK);
-        apb_if.PENABLE = 1;
-        @(posedge PCLK);
-        apb_if.PSEL    = 0;
-        apb_if.PENABLE = 0;
+        @(apb_if.cb_driver);
+        apb_if.cb_driver.PADDR   <= addr;
+        apb_if.cb_driver.PWRITE  <= 1'b1;
+        apb_if.cb_driver.PSEL    <= 1'b1;
+        apb_if.cb_driver.PWDATA  <= {24'd0, data};
+        apb_if.cb_driver.PENABLE <= 1'b0;
+        @(apb_if.cb_driver);
+        apb_if.cb_driver.PENABLE <= 1'b1;
+        @(apb_if.cb_driver);
+        apb_if.cb_driver.PSEL    <= 1'b0;
+        apb_if.cb_driver.PENABLE <= 1'b0;
     endtask
 
 `ifndef __ICARUS__

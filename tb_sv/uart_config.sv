@@ -7,10 +7,10 @@ class uart_config;
 
     constraint limits_c {
         divisor inside {[4:64]}; // Keep divisor reasonable for simulation speed
-        wls     inside {5, 6, 7, 8};
-        pen     inside {0, 1};
-        eps     inside {0, 1};
-        stb     inside {1, 2};
+        wls     == 8;
+        pen     == 1;
+        eps     == 1;
+        stb     == 1;
     }
     
     function real get_bit_period_ns();
