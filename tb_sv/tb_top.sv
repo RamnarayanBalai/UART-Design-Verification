@@ -46,17 +46,31 @@ module tb_top;
         $display("[TB TOP] Instantiating and initializing OOP Env...");
         env_inst = new(apb_if, uart_if);
 
-        // Configure divisor and line control on DUT
-        apb_write(5'h0C, 8'h80); // DLAB = 1
-        apb_write(5'h00, 8'h04); // DLL = 4
-        apb_write(5'h04, 8'h00); // DLH = 0
-        apb_write(5'h0C, 8'h03); // DLAB = 0, word_length = 8, stop = 1, parity = none
-        
-        // Sync configuration class settings
-        env_inst.cfg.divisor = 4;
-        env_inst.cfg.wls     = 8;
-        env_inst.cfg.pen     = 0;
-        env_inst.cfg.stb     = 1;
+        // Randomize the config class dynamically
+        if (!env_inst.cfg.randomize()) begin
+            $error("[TB TOP] Configuration randomization failed!");
+        end
+
+        $display("[TB TOP] Randomized Config: Divisor=%0d, WordLength=%0d, ParityEnable=%0d, EvenParity=%0d, StopBits=%0d",
+                 env_inst.cfg.divisor, env_inst.cfg.wls, env_inst.cfg.pen, env_inst.cfg.eps, env_inst.cfg.stb);
+
+        // Map randomized config values to register fields and program DUT via APB
+        begin
+            logic [7:0] lcr_val;
+            lcr_val = 8'h00;
+            lcr_val[1:0] = env_inst.cfg.wls - 5;
+            lcr_val[2]   = (env_inst.cfg.stb == 2);
+            lcr_val[3]   = env_inst.cfg.pen;
+            lcr_val[4]   = env_inst.cfg.eps;
+
+            // Write DLL/DLH (DLAB = 1)
+            apb_write(5'h0C, 8'h80); // Set DLAB = 1
+            apb_write(5'h00, env_inst.cfg.divisor[7:0]); // DLL LSB
+            apb_write(5'h04, env_inst.cfg.divisor[15:8]); // DLH MSB
+            
+            // Write LCR settings (DLAB = 0)
+            apb_write(5'h0C, lcr_val); 
+        end
 
         $display("[TB TOP] Starting randomized loopback test run...");
         env_inst.run(30);
@@ -79,5 +93,15 @@ module tb_top;
         apb_if.PSEL    = 0;
         apb_if.PENABLE = 0;
     endtask
+
+`ifndef __ICARUS__
+    // Bind assertion module to all uart_tx instances
+    bind uart_tx uart_tx_sva tx_sva_inst (
+        .clk(clk),
+        .rst_n(rst_n),
+        .txd(txd),
+        .state(state)
+    );
+`endif
 
 endmodule

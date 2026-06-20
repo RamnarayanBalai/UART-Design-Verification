@@ -35,13 +35,13 @@ interface apb_interface(input logic PCLK, input logic PRESETn);
     // 2. Control/Address signals must stay stable between setup and access phase
     property p_apb_addr_stable;
         @(posedge PCLK) disable iff (!PRESETn)
-        (PSEL && !PENABLE) -> ##1 (PSEL && PENABLE -> $stable(PADDR));
+        (PSEL && !PENABLE) => (PSEL && PENABLE -> $stable(PADDR));
     endproperty
     assert_apb_addr_stable: assert property(p_apb_addr_stable);
 
     property p_apb_write_stable;
         @(posedge PCLK) disable iff (!PRESETn)
-        (PSEL && !PENABLE) -> ##1 (PSEL && PENABLE -> $stable(PWRITE));
+        (PSEL && !PENABLE) => (PSEL && PENABLE -> $stable(PWRITE));
     endproperty
     assert_apb_write_stable: assert property(p_apb_write_stable);
 `endif

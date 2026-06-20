@@ -34,3 +34,5 @@ sim_output.log
 *.user
 Thumbs.db
 Desktop.ini
+interview_prep.md
+code_walkthrough.md
