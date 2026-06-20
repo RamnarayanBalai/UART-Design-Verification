@@ -36,6 +36,13 @@ module tb_apb_uart;
 
     always #10 PCLK = ~PCLK;
 
+    always @(posedge PCLK) begin
+        if (PRESETn) begin
+            $display("[DEBUG] Time=%0d | PADDR=%2h PWRITE=%b PSEL=%b PENABLE=%b PWDATA=%2h PRDATA=%2h | TX_State=%0d RX_State=%0d TXD=%b RXD=%b LSR=%2h DR=%b | rx_count=%0d tx_count=%0d", 
+                     $time, PADDR, PWRITE, PSEL, PENABLE, PWDATA[7:0], PRDATA[7:0], uut.tx.state, uut.rx.state, TXD, RXD, uut.regs.LSR, uut.regs.LSR[0], uut.regs.rx_fifo_count, uut.regs.tx_fifo_count);
+        end
+    end
+
     task automatic apb_write(input logic [4:0] addr, input logic [7:0] data);
         @(posedge PCLK);
         PADDR   = addr;

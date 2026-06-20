@@ -108,7 +108,7 @@ module uart_regs (
 
     // TX Pop & Launch Logic
     logic tx_start_reg;
-    assign tx_fifo_read = !tx_fifo_empty && !tx_busy && !tx_start_reg;
+    assign tx_fifo_read = tx_start_reg;
     assign tx_data      = tx_fifo_rdata;
     assign tx_start     = tx_start_reg;
 
@@ -116,7 +116,11 @@ module uart_regs (
         if (!rst_n) begin
             tx_start_reg <= 1'b0;
         end else begin
-            tx_start_reg <= tx_fifo_read;
+            if (!tx_fifo_empty && !tx_busy && !tx_start_reg) begin
+                tx_start_reg <= 1'b1;
+            end else begin
+                tx_start_reg <= 1'b0;
+            end
         end
     end
 
