@@ -37,59 +37,7 @@ Key features implemented:
 ### Block Diagram of the Design
 The diagram below shows how the internal modules are connected:
 
-```mermaid
-%%{init: {
-  'theme': 'base',
-  'themeVariables': {
-    'background': '#000000',
-    'primaryColor': '#FFFDD0',
-    'primaryTextColor': '#000000',
-    'primaryBorderColor': '#000000',
-    'lineColor': '#FFFFFF',
-    'tertiaryTextColor': '#FFFFFF',
-    'edgeLabelBackground': '#000000',
-    'clusterBkg': '#111111',
-    'clusterBorder': '#555555',
-    'titleColor': '#FFFFFF',
-    'fontSize': '12px'
-  },
-  'flowchart': {
-    'curve': 'linear'
-  }
-}}%%
-flowchart TD
-    %% Nodes
-    APB["APB3 Slave Interface\n(PCLK, PRESETn, PADDR, PSEL, PENABLE, PWRITE, PWDATA, PRDATA)"]
-    Regs["Register Block\n(uart_regs.sv)"]
-    BRG["Baud Rate Generator\n(baud_rate_generator.sv)"]
-    
-    subgraph Buffers ["FIFO Buffers"]
-        TX_FIFO["TX FIFO\n(16x8 depth)"]
-        RX_FIFO["RX FIFO\n(16x11 depth)"]
-    end
-    
-    subgraph Engines ["Serial Transmitter & Receiver"]
-        TX_Eng["UART Transmitter\n(uart_tx.sv)"]
-        RX_Eng["UART Receiver\n(uart_rx.sv)"]
-    end
-    
-    TXD["TXD Pin"]
-    RXD["RXD Pin"]
-
-    %% Connections
-    APB <-->|Read / Write| Regs
-    Regs -->|16-bit Divisor| BRG
-    BRG -->|bclk_en| TX_Eng
-    BRG -->|bclk_en| RX_Eng
-
-    Regs -->|Write Data| TX_FIFO
-    TX_FIFO -->|tx_data & tx_start| TX_Eng
-    TX_Eng --> TXD
-
-    RXD --> RX_Eng
-    RX_Eng -->|rx_data & error status| RX_FIFO
-    RX_FIFO -->|Read Data| Regs
-```
+![UART Block Diagram](docs/images/uart_blockdiagram.png)
 
 ### Reference Diagrams
 
