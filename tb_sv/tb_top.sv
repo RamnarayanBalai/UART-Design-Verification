@@ -36,6 +36,8 @@ module tb_top;
     env env_inst;
 
     initial begin
+        $dumpfile("dump.vcd");
+        $dumpvars(0, tb_top);
         PCLK    = 0;
         PRESETn = 0;
         
