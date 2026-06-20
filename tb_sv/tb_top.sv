@@ -14,8 +14,8 @@ module tb_top;
     apb_interface  apb_if(PCLK, PRESETn);
     uart_interface uart_if();
 
-    // Serial loopback connection
-    assign uart_if.RXD = uart_if.TXD;
+    // Loopback with error injection capability
+    assign uart_if.RXD = uart_if.err_inject ? uart_if.err_val : uart_if.TXD;
 
     // DUT Instantiation
     apb_uart dut (
@@ -55,6 +55,8 @@ module tb_top;
 
         $display("[TB TOP] Randomized Config: Divisor=%0d, WordLength=%0d, ParityEnable=%0d, EvenParity=%0d, StopBits=%0d",
                  env_inst.cfg.divisor, env_inst.cfg.wls, env_inst.cfg.pen, env_inst.cfg.eps, env_inst.cfg.stb);
+
+        env_inst.cov.sample_divisor(env_inst.cfg.divisor);
 
         // Map randomized config values to register fields and program DUT via APB
         begin

@@ -28,13 +28,13 @@ class env;
         rx_mon2sb = new();
         
         cfg         = new();
-        gen         = new(gen2drv, drv_done, cfg);
+        gen         = new(gen2drv, drv_done, cfg, v_uart);
         drv         = new(vif, gen2drv, drv_done);
         cov         = new();
         mon_apb     = new(vif, apb2sb, cov);
         mon_uart_tx = new(v_uart, tx_mon2sb, cfg, 1'b1);
         mon_uart_rx = new(v_uart, rx_mon2sb, cfg, 1'b0);
-        sb          = new(apb2sb, tx_mon2sb, rx_mon2sb);
+        sb          = new(apb2sb, tx_mon2sb, rx_mon2sb, cfg);
     endfunction
 
     task run(int num_tx);

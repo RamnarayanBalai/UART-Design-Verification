@@ -44,6 +44,34 @@ interface apb_interface(input logic PCLK, input logic PRESETn);
         (PSEL && !PENABLE) |=> (PSEL && PENABLE -> $stable(PWRITE));
     endproperty
     assert_apb_write_stable: assert property(p_apb_write_stable);
+
+    // 3. PENABLE must be asserted one cycle after PSEL rises
+    property p_apb_sel_enable;
+        @(posedge PCLK) disable iff (!PRESETn)
+        $rose(PSEL) |=> PENABLE;
+    endproperty
+    assert_apb_sel_enable: assert property(p_apb_sel_enable);
+
+    // 4. PWDATA must be stable during write access
+    property p_apb_wdata_stable;
+        @(posedge PCLK) disable iff (!PRESETn)
+        (PSEL && PWRITE && !PENABLE) |=> $stable(PWDATA);
+    endproperty
+    assert_apb_wdata_stable: assert property(p_apb_wdata_stable);
+
+    // 5. PREADY must always be high when peripheral is selected (design specification)
+    property p_apb_pready_always;
+        @(posedge PCLK) disable iff (!PRESETn)
+        PSEL -> PREADY === 1'b1;
+    endproperty
+    assert_apb_pready_always: assert property(p_apb_pready_always);
+
+    // 6. PSLVERR must always be low (no error responses supported)
+    property p_apb_pslverr_always;
+        @(posedge PCLK) disable iff (!PRESETn)
+        PSEL -> PSLVERR === 1'b0;
+    endproperty
+    assert_apb_pslverr_always: assert property(p_apb_pslverr_always);
 `endif
 
 endinterface

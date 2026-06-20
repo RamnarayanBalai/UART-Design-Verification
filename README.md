@@ -26,9 +26,25 @@ Key features implemented:
     *   **1 Stop Bit** (high level)
     
     $$\text{Frame} = 1\text{ Start bit} + 8\text{ Data bits} + 1\text{ Even Parity bit} + 1\text{ Stop bit}$$
-*   **Baud Rate Calculation**: The clock divider module divides the system clock (`PCLK`) using a 16-bit divisor:
-    $$Divisor = \{DLH, DLL\}$$
-    It generates a clock enable pulse (`bclk_en`) which ticks at 16 times the baud rate.
+*   **Baud Rate Calculation & Configuration**: The clock divider module divides the system clock (`PCLK`) using a 16-bit configurable divisor:
+    $$\text{divisor} = \{DLH, DLL\}$$
+    It generates a clock enable pulse (`bclk_en`) which ticks at 16 times the target baud rate:
+    $$\text{divisor} = \frac{f_{PCLK}}{16 \times \text{Baud Rate}}$$
+
+    *Divisor Lookup Table for Standard Baud Rates:*
+    | Baud Rate | Divisor ($f_{PCLK}=50\text{ MHz}$) | DLH / DLL (50 MHz) | Divisor ($f_{PCLK}=100\text{ MHz}$) | DLH / DLL (100 MHz) | Error % |
+    | :--- | :--- | :--- | :--- | :--- | :--- |
+    | **9600** | 326 | `8'h01` / `8'h46` | 651 | `8'h02` / `8'h8B` | ~0.1% |
+    | **19200** | 163 | `8'h00` / `8'hA3` | 326 | `8'h01` / `8'h46` | ~0.1% |
+    | **38400** | 81 | `8'h00` / `8'h51` | 163 | `8'h00` / `8'hA3` | ~0.1% |
+    | **57600** | 54 | `8'h00` / `8'h36` | 109 | `8'h00` / `8'h6D` | ~0.4% |
+    | **115200** | 27 | `8'h00` / `8'h1B` | 54 | `8'h00` / `8'h36` | ~0.4% |
+
+    *Verified Configurations in Testbench:*
+    The design is verified dynamically across a range of system clock divisions instead of a single hardcoded baud rate:
+    - **System Clock (`PCLK`):** Running at **50 MHz** ($T_{clk} = 20\text{ ns}$) in both lightweight and SystemVerilog testbenches.
+    - **SystemVerilog Testbench Range:** Verified across randomized divisor values from **4 to 64**, equivalent to baud rates from **48,828 bps to 781,250 bps**.
+    - **Lightweight Loopback Testbench:** Runs at a divisor of **4** (equivalent to **781,250 bps**) to maximize simulation speed.
 *   **Sampling**:
     *   The receiver looks for a high-to-low transition (falling edge) on the `RXD` line to detect a start bit.
     *   It waits 8 ticks of the 16x oversampling clock to sample the middle of the start bit. If the line is still low, it is a valid start bit. If it is high, the receiver ignores it as noise and goes back to IDLE.
