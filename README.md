@@ -149,11 +149,49 @@ vvp apb_uart_tb.vvp
 
 ## 6. Simulation Results & Waveforms
 ### Test Logs
-Test log from the SystemVerilog testbench on EDA Playground:
+Test log from the SystemVerilog testbench on EDA Playground (showing the new decoupled scoreboard with 82 matches and 0 errors):
 ```text
+# KERNEL: [TB TOP] Instantiating and initializing OOP Env...
 # KERNEL: [TB TOP] Randomized Config: Divisor=6, WordLength=8, ParityEnable=1, EvenParity=1, StopBits=1
 # KERNEL: [TB TOP] Starting randomized loopback test run...
-# KERNEL: [Env] Test run completed. Matches=60, Errors=0
+# KERNEL: 
+# KERNEL: ==================================================
+# KERNEL: [Generator] PROGRAMMING CONFIGURATION REGISTERS
+# KERNEL: ==================================================
+...
+# KERNEL: ==================================================
+# KERNEL: [Generator] TEST CASE 1: Simple Loopback with LSR Polling
+# KERNEL: ==================================================
+...
+# KERNEL: ==================================================
+# KERNEL: [Generator] TEST CASE 2: FIFO Stress Test (16-Byte Burst)
+# KERNEL: ==================================================
+...
+# KERNEL: ==================================================
+# KERNEL: [Generator] TEST CASE 3: RX Overrun Test
+# KERNEL: ==================================================
+...
+# KERNEL: [Generator] SUCCESS: Overrun Error (LSR[1]) detected!
+...
+# KERNEL: ==================================================
+# KERNEL: [Generator] TEST CASE 4: Parity Error Injection
+# KERNEL: ==================================================
+...
+# KERNEL: ==================================================
+# KERNEL: [Generator] TEST CASE 5: Framing Error Injection
+# KERNEL: ==================================================
+...
+# KERNEL: ==================================================
+# KERNEL: [Generator] TEST CASE 6: Break Interrupt Injection
+# KERNEL: ==================================================
+...
+# KERNEL: ==================================================
+# KERNEL: [Generator] TEST CASE 7: FIFO Clear Test
+# KERNEL: ==================================================
+# KERNEL: [Generator] Issuing TX FIFO Clear via FCR...
+# KERNEL: [Scoreboard] FCR TX FIFO Clear: keeping in-flight byte d0, clearing remaining (Count: 1)
+...
+# KERNEL: [Env] Test run completed. Matches=82, Errors=0
 # KERNEL: [TB TOP] Test Finished.
 ```
 
@@ -188,3 +226,22 @@ Below are the simulation waveforms from the tests:
 5.  **RX FIFO Status**
     Shows the received byte and error flags being stored and read over the APB bus:
     ![RX FIFO Waveform](waveforms/rx_fifo.png)
+
+---
+
+## 7. Advanced Verification & Troubleshooting
+
+To align with VLSI industry practices and ensure rigorous verification quality, we resolved critical design bugs and architectural issues:
+
+### A. Decoupled Scoreboard via internal FIFO Predictor Model
+*   **The Issue:** Passing scoreboard references directly to the generator (`generator.sv`) created tightly coupled components and compile-order issues:
+    `ERROR VCP2000 "Syntax error. Unexpected token: scoreboard[_IDENTIFIER]."` inside `generator.sv` because `generator.sv` was compiled before `scoreboard.sv` in `tb_pkg.sv`.
+*   **The Resolution:** We fully decoupled the generator. The scoreboard now runs as a passive observer with an internal **FIFO Predictor Model** to track level counts (`tx_fifo_count` up to 17, `rx_fifo_count` up to 16) and handles queue operations independently based on APB/UART monitored transactions.
+
+### B. LSR Read Side-Effect (Overrun Flag)
+*   **The Issue:** Reading the LSR register (`5'h14`) clears the Overrun Error (`LSR[1]`) bit. Polling LSR in the generator to detect transmission completion in Test Case 3 cleared the overrun bit before the testcase could assert it.
+*   **The Resolution:** We replaced LSR polling with precise timer-based delays (`#`) calculated dynamically from `cfg.get_bit_period_ns()` for error/overrun tests. This preserved the sticky overrun error bit until explicitly checked.
+
+### C. FCR FIFO Clear & In-Flight Bytes
+*   **The Issue:** Initiating a TX FIFO clear via FCR (`FCR[2] = 1`) instantly empties the FIFO but does not affect the byte already loaded into the transmitter's shift register (which continues transmitting). This caused queue mismatch in the scoreboard.
+*   **The Resolution:** The scoreboard predictor was designed to check if `tx_expected_q.size() > 0` during a TX FIFO clear and preserve exactly the first (in-flight) byte while flushing the remaining bytes. This holds `tx_fifo_count = 1` and matches hardware behavior perfectly.
