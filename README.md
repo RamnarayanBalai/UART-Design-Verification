@@ -38,88 +38,57 @@ Key features implemented:
 The diagram below shows how the internal modules are connected:
 
 ```mermaid
-graph TD
-    %% Styling
-    classDef bus fill:#eef,stroke:#33f,stroke-width:2px;
-    classDef core fill:#ffe,stroke:#b80,stroke-width:2px;
-    classDef serial fill:#fee,stroke:#f33,stroke-width:2px;
-    classDef fifo fill:#efe,stroke:#3a3,stroke-width:2px;
-
-    %% AMBA APB Bus Interface
-    subgraph APB_Interface ["APB3 Slave Interface"]
-        PCLK["PCLK (Clock)"]
-        PRESETn["PRESETn (Reset)"]
-        PADDR["PADDR [4:0]"]
-        PSEL["PSEL"]
-        PENABLE["PENABLE"]
-        PWRITE["PWRITE"]
-        PWDATA["PWDATA [31:0]"]
-        PRDATA["PRDATA [31:0]"]
-        PREADY["PREADY (tied 1)"]
-        PSLVERR["PSLVERR (tied 0)"]
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#000000',
+    'primaryColor': '#FFFDD0',
+    'primaryTextColor': '#000000',
+    'primaryBorderColor': '#000000',
+    'lineColor': '#FFFFFF',
+    'tertiaryTextColor': '#FFFFFF',
+    'edgeLabelBackground': '#000000',
+    'clusterBkg': '#111111',
+    'clusterBorder': '#555555',
+    'titleColor': '#FFFFFF',
+    'fontSize': '12px'
+  },
+  'flowchart': {
+    'curve': 'linear'
+  }
+}}%%
+flowchart TD
+    %% Nodes
+    APB["APB3 Slave Interface\n(PCLK, PRESETn, PADDR, PSEL, PENABLE, PWRITE, PWDATA, PRDATA)"]
+    Regs["Register Block\n(uart_regs.sv)"]
+    BRG["Baud Rate Generator\n(baud_rate_generator.sv)"]
+    
+    subgraph Buffers ["FIFO Buffers"]
+        TX_FIFO["TX FIFO\n(16x8 depth)"]
+        RX_FIFO["RX FIFO\n(16x11 depth)"]
     end
-
-    %% Internal Register & Control Block
-    subgraph RegBlock ["Register Block (uart_regs.sv)"]
-        RegDec["Register Decoder"]
-        LCR["LCR (Line Control Register)"]
-        LSR["LSR (Line Status Register)"]
-        FCR["FCR (FIFO Control Register)"]
-        SCR["SCR (Scratchpad Register)"]
-        DLL["DLL (Divisor Latch LSB)"]
-        DLH["DLH (Divisor Latch MSB)"]
+    
+    subgraph Engines ["Serial Transmitter & Receiver"]
+        TX_Eng["UART Transmitter\n(uart_tx.sv)"]
+        RX_Eng["UART Receiver\n(uart_rx.sv)"]
     end
-
-    %% Baud Rate Generator
-    subgraph BRG ["Baud Rate Generator (baud_rate_generator.sv)"]
-        Divisor["Divisor [15:0]"]
-        Counter["16-bit Counter"]
-        bclk_en["bclk_en (16x Clock Tick)"]
-        bclk["bclk (Clock Output)"]
-    end
-
-    %% FIFOs
-    subgraph FIFOs ["FIFOs"]
-        TX_FIFO["TX FIFO (16x8 depth)"]
-        RX_FIFO["RX FIFO (16x11 depth)"]
-    end
-
-    %% UART Serial Engines
-    subgraph Engines ["UART Transmitter and Receiver"]
-        UART_TX["UART Transmitter (uart_tx.sv)"]
-        UART_RX["UART Receiver (uart_rx.sv)"]
-    end
+    
+    TXD["TXD Pin"]
+    RXD["RXD Pin"]
 
     %% Connections
-    PADDR & PSEL & PENABLE & PWRITE & PWDATA --> RegDec
-    RegDec --> LCR & FCR & SCR & DLL & DLH
-    DLL & DLH --> Divisor
-    Divisor --> BRG
-    PCLK & PRESETn --> BRG & RegBlock & UART_TX & UART_RX
-    
-    %% TX path
-    PWDATA[7:0] -- "CPU Write" --> TX_FIFO
-    TX_FIFO -- "tx_data & tx_start" --> UART_TX
-    UART_TX --> TXD["TXD (Transmit Pin)"]
-    UART_TX -- "tx_busy & tx_done" --> RegBlock
-    
-    %% RX path
-    RXD["RXD (Receive Pin)"] --> UART_RX
-    UART_RX -- "rx_data & rx_valid" --> RX_FIFO
-    UART_RX -- "Parity/Framing/Break errors" --> RX_FIFO
-    RX_FIFO -- "Data & Error status" --> RegDec
-    RegDec --> PRDATA
-    
-    %% Clock enables
-    bclk_en --> UART_TX
-    bclk_en --> UART_RX
+    APB <-->|Read / Write| Regs
+    Regs -->|16-bit Divisor| BRG
+    BRG -->|bclk_en| TX_Eng
+    BRG -->|bclk_en| RX_Eng
 
-    %% Apply Classes
-    class PCLK,PRESETn,PADDR,PSEL,PENABLE,PWRITE,PWDATA,PRDATA,PREADY,PSLVERR bus;
-    class LCR,LSR,FCR,SCR,DLL,DLH,RegDec core;
-    class UART_TX,UART_RX,BRG core;
-    class TX_FIFO,RX_FIFO fifo;
-    class TXD,RXD serial;
+    Regs -->|Write Data| TX_FIFO
+    TX_FIFO -->|tx_data & tx_start| TX_Eng
+    TX_Eng --> TXD
+
+    RXD --> RX_Eng
+    RX_Eng -->|rx_data & error status| RX_FIFO
+    RX_FIFO -->|Read Data| Regs
 ```
 
 ### Reference Diagrams
