@@ -46,10 +46,7 @@ The diagram below shows how the internal modules are connected:
     
     ![UART Mid-bit Sampling](docs/images/uart_sampling.png)
 
-*   **UART Serial Frame Format (8-E-1)**
-    Shows the structure of the 11-bit serial packet (1 Start, 8 Data, 1 Even Parity, 1 Stop).
-    
-    ![UART 8-bit Frame Format](docs/images/uart_frame.png)
+* 
 
 ---
 
