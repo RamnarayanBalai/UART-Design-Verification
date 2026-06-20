@@ -229,7 +229,7 @@ Below are the simulation waveforms from the tests:
 
 ---
 
-## 7. Advanced Verification & Troubleshooting
+## 7. Troubleshooting
 
 To align with VLSI industry practices and ensure rigorous verification quality, we resolved critical design bugs and architectural issues:
 
