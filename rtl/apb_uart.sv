@@ -12,8 +12,7 @@ module apb_uart (
 
     // Serial Interface
     output logic        TXD,
-    input  logic        RXD,
-    output logic        INTR
+    input  logic        RXD
 );
 
     // Divisor and control configurations
@@ -44,7 +43,7 @@ module apb_uart (
 
     // APB to Register file mappings
     assign reg_write = PSEL && PENABLE && PWRITE;
-    assign reg_read  = PSEL && !PWRITE;
+    assign reg_read  = PSEL && PENABLE && !PWRITE;
     assign PRDATA    = {24'd0, reg_rdata};
     assign PREADY    = 1'b1;
     assign PSLVERR   = 1'b0;
@@ -97,7 +96,6 @@ module apb_uart (
         .reg_read(reg_read),
         .reg_wdata(PWDATA[7:0]),
         .reg_rdata(reg_rdata),
-        .intr(INTR),
         .divisor(divisor),
         .cfg_wls(cfg_wls),
         .cfg_stb(cfg_stb),

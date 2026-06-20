@@ -14,7 +14,6 @@ module tb_apb_uart;
     logic        PSLVERR;
     logic        TXD;
     logic        RXD;
-    logic        INTR;
 
     apb_uart uut (
         .PCLK(PCLK),
@@ -28,8 +27,7 @@ module tb_apb_uart;
         .PREADY(PREADY),
         .PSLVERR(PSLVERR),
         .TXD(TXD),
-        .RXD(RXD),
-        .INTR(INTR)
+        .RXD(RXD)
     );
 
     assign RXD = TXD;
@@ -63,8 +61,9 @@ module tb_apb_uart;
         PSEL    = 1;
         @(posedge PCLK);
         PENABLE = 1;
-        @(posedge PCLK);
+        #5;
         data    = PRDATA[7:0];
+        @(posedge PCLK);
         PSEL    = 0;
         PENABLE = 0;
     endtask
@@ -116,7 +115,7 @@ module tb_apb_uart;
         apb_write(5'h00, 8'h22);
         apb_write(5'h00, 8'h33);
 
-        #10000; 
+        #100000; 
 
         apb_read(5'h00, rdata);
         if (rdata !== 8'h11) $display("FAIL: Bulk 1 - Got %2h", rdata);
