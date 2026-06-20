@@ -1,0 +1,36 @@
+# Simulation Outputs
+*.vvp
+*.vcd
+*.log
+sim_output.log
+
+# Vivado / Quartus directories and files
+/xsim.dir/
+/xsim.jou
+/xsim.log
+/xvlog.log
+/xvlog.pb
+/xelab.log
+/xelab.pb
+/*.str
+/db/
+/incremental_db/
+/output_files/
+/*.qpf
+/*.qsf
+/*.qws
+/*.sft
+/*.summary
+/*.rpt
+/*.sof
+/*.pof
+/*.jdi
+/*.pin
+
+# OS and Editor configs
+.vscode/
+.idea/
+*.suo
+*.user
+Thumbs.db
+Desktop.ini
