@@ -1,39 +1,41 @@
 # AMBA APB UART (8-E-1) Core - Design & Verification
 
-An optimized, synthesizable polled-mode UART IP core modeled after **TI KeyStone UART specifications** (8-E-1 fixed format, no interrupts) and interfaced via **AMBA APB3**. Tested using a SystemVerilog OOP environment, assertions (SVA), and functional coverage.
+A synthesizable UART design with an AMBA APB3 slave interface. Verified using SystemVerilog, Assertions (SVA), and functional coverage.
 
 ---
 
 ## 1. Overview
-The **AMBA APB UART Core** is a custom hardware block designed to bridge high-speed parallel system buses to low-speed serial peripherals. It implements a complete polled-mode UART (Universal Asynchronous Receiver-Transmitter) protocol wrapped inside an AMBA APB3 completer interface.
+This project contains a UART (Universal Asynchronous Receiver-Transmitter) module connected to an AMBA APB3 bus. It allows a microcontroller or processor to send and receive serial data by reading and writing to registers over the APB bus.
 
-Key features include:
-*   **Bus Compatibility**: Full compliance with the AMBA APB3 specifications, supporting zero-wait-state transfers.
-*   **UART Specifications**: Fixed 8-E-1 data framing (8 data bits, Even parity, 1 stop bit) to simplify physical interfaces, with a robust 16x oversampling mid-bit sampler for reliable noise-immune data recovery.
-*   **Buffering**: Parameterized First-Word Fall-Through (FWFT) synchronous FIFOs (16-byte deep) for both transmission (TX) and reception (RX). The RX FIFO stores line error statuses directly alongside data bytes to maintain strict error tracking.
-*   **Clock Management**: Fully integrated fractional baud rate divider using a 16-bit divisor.
-*   **Verification Suite**: Dual-tier verification environment containing a lightweight direct loopback simulation using Icarus Verilog, and a complete SystemVerilog OOP-based Testbench with functional coverage, SystemVerilog Assertions (SVA), and constrained-random stimulus generator.
+Key features implemented:
+*   **APB3 Slave Interface**: Supports simple 2-cycle read and write bus transfers with no wait states (PREADY is tied to 1).
+*   **UART Format**: Fixed 8-E-1 frame format (8 data bits, Even parity, 1 stop bit).
+*   **16x Oversampling**: The receiver samples the incoming serial line at the 8th clock tick (middle of the bit) to get stable data and filter out noise.
+*   **FIFOs**: 16-deep FIFO buffers for both Transmit (TX) and Receive (RX) paths. The RX FIFO stores error status flags (Parity Error, Framing Error, Break Interrupt) along with each data byte.
+*   **Baud Rate Generator**: A clock divider that takes a 16-bit divisor value from registers to generate the 16x oversampling clock pulse.
+*   **Verification**: A lightweight loopback simulation using Icarus Verilog, and a SystemVerilog testbench with randomized tests, functional coverage, and assertions.
 
 ---
 
-## 2. UART Explanation & Specifications
-### Operational Specifications
-*   **Fixed Frame Format**: 11-bit frame including:
-    *   **1 Start Bit** (logic low)
-    *   **8 Data Bits** (transmitted Least Significant Bit (LSB) first)
-    *   **1 Even Parity Bit** (even parity calculated over the 8 data bits)
-    *   **1 Stop Bit** (logic high)
+## 2. UART Specifications & Features
+### Specifications
+*   **Frame Format**: 11 bits total per character:
+    *   **1 Start Bit** (low level)
+    *   **8 Data Bits** (sent LSB first)
+    *   **1 Even Parity Bit** (even parity calculated from the 8 data bits)
+    *   **1 Stop Bit** (high level)
     
     $$\text{Frame} = 1\text{ Start bit} + 8\text{ Data bits} + 1\text{ Even Parity bit} + 1\text{ Stop bit}$$
-*   **Baud Rate Clocking**: The internal `baud_rate_generator` divides the main system clock (`PCLK`) based on a 16-bit divisor register:
+*   **Baud Rate Calculation**: The clock divider module divides the system clock (`PCLK`) using a 16-bit divisor:
     $$Divisor = \{DLH, DLL\}$$
-    This divider generates the 16x oversampling clock enable pulse (`bclk_en`).
-*   **Mid-Bit Sampling**:
-    *   The receiver checks for a valid start bit by detecting a falling edge and sampling at the **8th tick** of the 16x oversampling clock. If the line is high at the 8th tick, it is rejected as a glitch.
-    *   Subsequent data, parity, and stop bits are sampled at their center point (the **8th tick** of each 16-tick window) to maximize signal integrity and minimize phase noise influence.
+    It generates a clock enable pulse (`bclk_en`) which ticks at 16 times the baud rate.
+*   **Sampling**:
+    *   The receiver looks for a high-to-low transition (falling edge) on the `RXD` line to detect a start bit.
+    *   It waits 8 ticks of the 16x oversampling clock to sample the middle of the start bit. If the line is still low, it is a valid start bit. If it is high, the receiver ignores it as noise and goes back to IDLE.
+    *   It then samples each data, parity, and stop bit every 16 ticks (in the middle of the bit window) to ensure correct reading.
 
-### Block Diagram of the Simplified UART Core
-We have implemented a streamlined version of the standard 16550 UART design, omitting interrupt controllers and flow control, and hardcoding the data format to 8-E-1. The functional architecture is diagrammed below:
+### Block Diagram of the Design
+The diagram below shows how the internal modules are connected:
 
 ```mermaid
 graph TD
@@ -44,7 +46,7 @@ graph TD
     classDef fifo fill:#efe,stroke:#3a3,stroke-width:2px;
 
     %% AMBA APB Bus Interface
-    subgraph APB_Interface ["AMBA APB3 Slave Interface"]
+    subgraph APB_Interface ["APB3 Slave Interface"]
         PCLK["PCLK (Clock)"]
         PRESETn["PRESETn (Reset)"]
         PADDR["PADDR [4:0]"]
@@ -58,7 +60,7 @@ graph TD
     end
 
     %% Internal Register & Control Block
-    subgraph RegBlock ["Register Block & Control Logic (uart_regs.sv)"]
+    subgraph RegBlock ["Register Block (uart_regs.sv)"]
         RegDec["Register Decoder"]
         LCR["LCR (Line Control Register)"]
         LSR["LSR (Line Status Register)"]
@@ -72,18 +74,18 @@ graph TD
     subgraph BRG ["Baud Rate Generator (baud_rate_generator.sv)"]
         Divisor["Divisor [15:0]"]
         Counter["16-bit Counter"]
-        bclk_en["bclk_en (16x Clock Enable Tick)"]
-        bclk["bclk (50% Duty Cycle Clock)"]
+        bclk_en["bclk_en (16x Clock Tick)"]
+        bclk["bclk (Clock Output)"]
     end
 
     %% FIFOs
-    subgraph FIFOs ["Buffer FIFOs"]
-        TX_FIFO["TX FIFO (16x8 FWFT)"]
-        RX_FIFO["RX FIFO (16x11 FWFT)"]
+    subgraph FIFOs ["FIFOs"]
+        TX_FIFO["TX FIFO (16x8 depth)"]
+        RX_FIFO["RX FIFO (16x11 depth)"]
     end
 
     %% UART Serial Engines
-    subgraph Engines ["UART Serial Engines"]
+    subgraph Engines ["UART Transmitter and Receiver"]
         UART_TX["UART Transmitter (uart_tx.sv)"]
         UART_RX["UART Receiver (uart_rx.sv)"]
     end
@@ -97,15 +99,15 @@ graph TD
     
     %% TX path
     PWDATA[7:0] -- "CPU Write" --> TX_FIFO
-    TX_FIFO -- "tx_data [7:0] & tx_start" --> UART_TX
+    TX_FIFO -- "tx_data & tx_start" --> UART_TX
     UART_TX --> TXD["TXD (Transmit Pin)"]
     UART_TX -- "tx_busy & tx_done" --> RegBlock
     
     %% RX path
     RXD["RXD (Receive Pin)"] --> UART_RX
-    UART_RX -- "rx_data [7:0] & rx_valid" --> RX_FIFO
-    UART_RX -- "PE, FE, BI errors" --> RX_FIFO
-    RX_FIFO -- "rdata & errors" --> RegDec
+    UART_RX -- "rx_data & rx_valid" --> RX_FIFO
+    UART_RX -- "Parity/Framing/Break errors" --> RX_FIFO
+    RX_FIFO -- "Data & Error status" --> RegDec
     RegDec --> PRDATA
     
     %% Clock enables
@@ -120,109 +122,104 @@ graph TD
     class TXD,RXD serial;
 ```
 
-### Reference Diagrams (TI KeyStone Spec Reference)
+### Reference Diagrams
 
-*   **16x Oversampling / Mid-bit Sampling Timing**
-    The receiver FSM transitions on the falling edge of `RXD`, waits 8 cycles of `bclk_en` to hit the middle of the START bit, and then samples data bits every 16 cycles thereafter.
+*   **16x Oversampling & Sampling at Middle**
+    The receiver starts on the falling edge of `RXD`, waits 8 ticks to reach the center of the START bit, and then samples data bits every 16 ticks.
     
     ![UART Mid-bit Sampling](docs/images/uart_sampling.png)
 
-*   **UART Serial Frame Format (8-bit Even Parity Frame Format Option)**
-    Our implementation locks registers and engines to the 8-bit word, even parity, 1 stop bit configuration.
+*   **UART Serial Frame Format (8-E-1)**
+    Shows the structure of the 11-bit serial packet (1 Start, 8 Data, 1 Even Parity, 1 Stop).
     
     ![UART 8-bit Frame Format](docs/images/uart_frame.png)
 
 ---
 
-## 3. APB Explanation & Specifications
-### Operational Specifications
-The UART core behaves as an **AMBA APB3 Completer (Slave)**.
-*   **Port Interface**:
-    *   `PCLK`, `PRESETn`: System clock and active-low async reset.
-    *   `PADDR[4:0]`: Address bus.
-    *   `PSEL`, `PENABLE`: APB select and strobe signals.
-    *   `PWRITE`: Write (`1`) or Read (`0`) direction signal.
-    *   `PWDATA[31:0]`: Write data bus (lower 8 bits active).
-    *   `PRDATA[31:0]`: Read data bus (zero-padded to 32-bit).
-    *   `PREADY`: Ready flag, tied to `1'b1` indicating zero-wait-state transfers.
-    *   `PSLVERR`: Slave error flag, tied to `1'b0` (never errors out).
-*   **Two-Cycle Bus Transactions**:
-    1.  **SETUP Phase**: Asserts `PSEL` high while `PENABLE` remains low. The address `PADDR` and control signals are driven stable.
-    2.  **ACCESS Phase**: Asserts `PENABLE` high. The completer captures the write data on `PWDATA` (for writes) or drives read data on `PRDATA` (for reads). Due to `PREADY` being tied high, the transfer completes at the next rising edge of `PCLK`.
+## 3. APB3 Bus Specifications
+Our design implements a standard **AMBA APB3 Slave**.
+*   **Signals Used**:
+    *   `PCLK`, `PRESETn`: System clock and active-low reset.
+    *   `PADDR`: 5-bit address bus to select registers.
+    *   `PSEL`: Select signal to enable the UART peripheral.
+    *   `PENABLE`: Strobe signal to indicate the second cycle of a transfer.
+    *   `PWRITE`: Direction control (high for write, low for read).
+    *   `PWDATA`: 32-bit write data bus (only the lower 8 bits are used).
+    *   `PRDATA`: 32-bit read data bus (the upper 24 bits are padded with zeroes).
+    *   `PREADY`: Tied to `1'b1` (design has zero wait states).
+    *   `PSLVERR`: Tied to `1'b0` (does not generate bus errors).
+*   **Bus Transfer Cycles**:
+    *   **SETUP cycle**: APB master drives address and control signals, and asserts `PSEL` high.
+    *   **ACCESS cycle**: APB master asserts `PENABLE` high. The read/write data is transferred on the rising edge of `PCLK` at the end of this cycle.
 
-### State Diagram & Timing waveforms (AMBA APB Spec Reference)
-
-*   **APB Operating States FSM State Diagram**
-    The core supports standard state-transitions (IDLE -> SETUP -> ACCESS).
+### APB Diagrams
+*   **APB FSM State Diagram**: Shows the transitions between IDLE, SETUP, and ACCESS.
     
     ![APB Operating States](docs/images/apb_states.png)
 
-*   **Write Transfer (No Wait States)**
-    Address, control signals, and write data remain stable across setup and access cycles.
+*   **APB Write Timing (No Wait States)**:
     
     ![APB Write Timing](docs/images/apb_write.png)
 
-*   **Read Transfer (No Wait States)**
-    Read data `PRDATA` is driven by the slave during the access phase and sampled by the host at the rising edge.
+*   **APB Read Timing (No Wait States)**:
     
     ![APB Read Timing](docs/images/apb_read.png)
 
 ---
 
 ## 4. Project Directory Structure
-The repository contains the following files. Click on a filename to navigate directly to it:
+Here are the files in this project. You can click on the names to open them:
 
-| Component | File / Path | Description |
-| :--- | :--- | :--- |
-| **Top Wrapper** | [apb_uart.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/apb_uart.sv) | Core wrapper integrating the APB bus, register file, and UART TX/RX engines. |
-| **RTL Design** | [uart_regs.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/uart_regs.sv) | Register file holding status (`LSR`), control (`LCR`, `FCR`, `SCR`), and baud settings (`DLL`, `DLH`), housing the dual FWFT buffers. |
-| | [uart_tx.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/uart_tx.sv) | Serial transmitter engine implementing fixed 8-E-1 serialization FSM. |
-| | [uart_rx.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/uart_rx.sv) | Serial receiver engine implementing mid-bit oversampling, synchronizers, and error checks. |
-| | [fifo.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/fifo.sv) | Parameterized First-Word Fall-Through (FWFT) synchronous FIFO buffer. |
-| | [baud_rate_generator.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/baud_rate_generator.sv) | Baud divider counting system clock cycles to produce the 16x baud clock tick. |
-| **SystemVerilog OOP TB** | [tb_top.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/tb_top.sv) | Top testbench instantiating DUT, interfaces, binding assertions, and executing simulation. |
-| | [apb_interface.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/apb_interface.sv) | APB3 bus physical interface mapping clocking blocks and APB protocol check assertions. |
-| | [uart_interface.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_interface.sv) | Flat interface container for the TXD and RXD serial physical lines. |
-| | [tb_pkg.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/tb_pkg.sv) | Verification package clustering transaction structures, generator, driver, monitors, and scoreboard. |
-| | [uart_config.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_config.sv) | Config database object containing randomized divisor and bit periods limits. |
-| | [apb_trans.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/apb_trans.sv) | Transaction item holding randomized address, data, and read/write directions. |
-| | [generator.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/generator.sv) | High-level sequence generator driving stimulus into the driver and timing wait-states. |
-| | [driver.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/driver.sv) | Driver translating TLM transaction packets to pin-level APB bus signals. |
-| | [apb_monitor.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/apb_monitor.sv) | Monitor sniffing the APB interface and converting pin transitions back to transaction structures. |
-| | [uart_monitor.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_monitor.sv) | Monitor sampling serial lines to rebuild received bytes for comparison. |
-| | [scoreboard.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/scoreboard.sv) | Scoreboard comparing written versus readback/serialized data. |
-| | [env_coverage.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/env_coverage.sv) | Functional coverage module mapping LCR configurations (word sizes, stop bits, parity). |
-| | [env.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/env.sv) | Top-level verification environment container organizing initialization and run. |
-| | [uart_tx_sva.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_tx_sva.sv) | Assertion block monitoring serial line timing and checking protocol violations. |
-| **Lightweight Testbench** | [tb_apb_uart.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_apb_uart.sv) | Lightweight direct loopback regression testbench optimized for quick runs via `iverilog`. |
-| | [tb_baud_rate_generator.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_baud_rate_generator.sv) | Standalone unit testbench verifying Baud Rate Generator divisor logic. |
-| | [tb_fifo.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_fifo.sv) | Standalone unit testbench testing FIFO clear, write, read, overflow/underflow behavior. |
-| | [tb_uart_tx_rx.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_uart_tx_rx.sv) | Regression simulation for independent TX and RX engine functional checking. |
+| File Name | Description |
+| :--- | :--- |
+| [apb_uart.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/apb_uart.sv) | Top-level module that connects the APB interface, the registers, and the TX/RX blocks. |
+| [uart_regs.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/uart_regs.sv) | Register file containing registers (LCR, LSR, FCR, SCR, DLL, DLH) and the TX/RX FIFOs. |
+| [uart_tx.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/uart_tx.sv) | Serial transmitter that converts parallel data from the TX FIFO into serial bits on TXD. |
+| [uart_rx.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/uart_rx.sv) | Serial receiver that samples serial bits on RXD and pushes them to the RX FIFO. Includes input synchronizers to avoid metastability. |
+| [fifo.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/fifo.sv) | First-Word Fall-Through (FWFT) synchronous FIFO used for buffering. |
+| [baud_rate_generator.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/rtl/baud_rate_generator.sv) | Divides the system clock to generate the 16x baud clock tick. |
+| [tb_top.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/tb_top.sv) | Top verification wrapper that sets up clocks, binds assertions, and runs the testbench environment. |
+| [apb_interface.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/apb_interface.sv) | Interface for the APB signals, including clocking blocks and assertions to check APB protocol. |
+| [uart_interface.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_interface.sv) | Simple interface wrapper for the serial TXD and RXD lines. |
+| [tb_pkg.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/tb_pkg.sv) | Package that includes all verification class files. |
+| [uart_config.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_config.sv) | Configuration class for setting divisor and timing values. |
+| [apb_trans.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/apb_trans.sv) | Transaction class defining an APB packet (address, data, read/write direction). |
+| [generator.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/generator.sv) | Generates random test transactions and sends them to the driver. |
+| [driver.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/driver.sv) | Drives the transaction packet signals onto the physical APB interface. |
+| [apb_monitor.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/apb_monitor.sv) | Monitors the APB interface signals and converts them to transactions for the scoreboard. |
+| [uart_monitor.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_monitor.sv) | Monitors the serial line and reconstructs bytes to send to the scoreboard. |
+| [scoreboard.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/scoreboard.sv) | Compares the transmitted data against received data to verify correct behavior. |
+| [env_coverage.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/env_coverage.sv) | Tracks functional coverage of configuration register values. |
+| [env.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/env.sv) | Combines all testbench components (driver, monitor, scoreboard, generator). |
+| [uart_tx_sva.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb_sv/uart_tx_sva.sv) | Assertions to verify the transmitter FSM states and TXD serial outputs. |
+| [tb_apb_uart.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_apb_uart.sv) | Lightweight loopback testbench for simulation with Icarus Verilog. |
+| [tb_baud_rate_generator.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_baud_rate_generator.sv) | Standalone testbench for the Baud Rate Generator. |
+| [tb_fifo.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_fifo.sv) | Standalone testbench for the FIFO. |
+| [tb_uart_tx_rx.sv](file:///e:/projects/VLSI-Projects/UART-Design&Verification/tb/tb_uart_tx_rx.sv) | Standalone testbench for the UART transmitter and receiver engines. |
 
 ---
 
 ## 5. How to Run Simulation
-### A. Local Simulation (using Icarus Verilog)
-To compile and simulate the lightweight loopback testbench locally, execute the following commands in your shell:
+### A. Run Locally (using Icarus Verilog)
+To run the lightweight loopback testbench on your computer, run:
 ```bash
 iverilog -g2012 -o apb_uart_tb.vvp rtl/baud_rate_generator.sv rtl/fifo.sv rtl/uart_tx.sv rtl/uart_rx.sv rtl/uart_regs.sv rtl/apb_uart.sv tb/tb_apb_uart.sv
 vvp apb_uart_tb.vvp
 ```
 
-### B. Full OOP SystemVerilog Environment (online via EDA Playground)
-1.  Open the verification environment workspace at [EDA Playground](https://www.edaplayground.com/x/rFbW).
-2.  Configure the tool settings in the interface:
+### B. Run SystemVerilog Testbench (on EDA Playground)
+1.  Open the project at [EDA Playground](https://www.edaplayground.com/x/rFbW).
+2.  Set the simulator settings:
     *   **Simulator**: *Aldec Riviera-PRO*
     *   **Compile Options**: `-sysverilog`
-    *   **Run Options**: Enable *EPWave* to view waveform files.
-3.  Click **Run** to execute the randomized test suite, inspect functional coverage reports, and analyze waveforms.
+    *   **Run Options**: Enable *EPWave* to view waveforms.
+3.  Click **Run** to execute the tests.
 
 ---
 
-## 6. Results, Logs, and Waveforms
-### Simulation Logs
-Below is the output log from the SystemVerilog randomized loopback verification environment running on Aldec Riviera-PRO (EDA Playground):
-
+## 6. Simulation Results & Waveforms
+### Test Logs
+Test log from the SystemVerilog testbench on EDA Playground:
 ```text
 # KERNEL: [TB TOP] Randomized Config: Divisor=6, WordLength=8, ParityEnable=1, EvenParity=1, StopBits=1
 # KERNEL: [TB TOP] Starting randomized loopback test run...
@@ -230,7 +227,7 @@ Below is the output log from the SystemVerilog randomized loopback verification 
 # KERNEL: [TB TOP] Test Finished.
 ```
 
-The lightweight local loopback regression simulation (`tb_apb_uart.sv`) output log:
+Test log from the lightweight Icarus Verilog testbench:
 ```text
 Starting APB UART Testbench...
 PASS: Scratchpad
@@ -240,24 +237,24 @@ APB UART Test Done.
 ```
 
 ### Waveforms
-The waveforms generated during the simulation illustrate the correct timing behavior of the internal sub-modules:
+Below are the simulation waveforms from the tests:
 
 1.  **Baud Rate Generator Output**
-    Shows the generation of the 16x oversampling clock enable pulse (`bclk_en`) relative to `PCLK` and the configured divisor:
+    Shows the divisor counting and the clock enable tick (`bclk_en`) pulse:
     ![Baud Rate Generator Waveform](waveforms/baud_rate_generator.png)
 
-2.  **Transmitter Serializing Data (TX)**
-    Highlights the serialization of parallel data into the 8-E-1 frame format on the `TXD` pin:
+2.  **Transmitter (TX) Serial Output**
+    Shows the serialization of data to the `TXD` pin with 8-E-1 formatting:
     ![TX Waveform](waveforms/tx.png)
 
 3.  **TX FIFO Status**
-    Shows write, read, and count transitions during serial transmission:
+    Shows data being written to, held in, and read from the transmit FIFO:
     ![TX FIFO Waveform](waveforms/tx_fifo.png)
 
-4.  **Receiver Sampling Data (RX)**
-    Demonstrates the double-flop synchronization of `RXD`, falling edge start bit detection, and mid-bit sampling logic:
+4.  **Receiver (RX) Serial Input**
+    Shows the receiver synchronizing the `RXD` pin, finding the start bit falling edge, and sampling in the middle of each bit:
     ![RX Waveform](waveforms/rx.png)
 
 5.  **RX FIFO Status**
-    Illustrates data accumulation, error status bits (parity/framing/break) aggregation, and reading of received bytes:
+    Shows the received byte and error flags being stored and read over the APB bus:
     ![RX FIFO Waveform](waveforms/rx_fifo.png)
