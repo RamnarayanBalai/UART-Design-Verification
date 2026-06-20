@@ -91,6 +91,14 @@ module tb_uart_tx_rx;
         .err_bi(err_bi)
     );
 
+    // Debug Monitor
+    always @(posedge clk) begin
+        if (rst_n) begin
+            $display("[DEBUG] Time=%0d | TX_State=%0d txd=%b bclk_en=%b tx_busy=%b | RX_State=%0d rxd=%b rxd_sync=%b RX_bclk_cnt=%0d RX_bit_cnt=%0d rx_valid=%b", 
+                     $time, tx.state, txd, bclk_en, tx_busy, rx.state, rxd, rx.rxd_sync, rx.bclk_count, rx.bit_count, rx_valid);
+        end
+    end
+
     // Clock: 50MHz (20ns period)
     always #10 clk = ~clk;
 

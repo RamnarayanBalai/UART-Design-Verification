@@ -1,30 +1,19 @@
-// =============================================================================
-// Module: uart_tx
-// Project: UART Design & Verification
-// Description: Serial transmitter engine. Serializes parallel data into a 
-//              standard UART frame. Handles configurable data length (5-8 bits),
-//              parity (odd, even, none), stop bits (1, 1.5, 2), and break control.
-// =============================================================================
-
-`timescale 1ns / 1ps
-
 module uart_tx (
-    input  logic       clk,            // System clock
-    input  logic       rst_n,          // Active-low asynchronous reset
-    input  logic       bclk_en,        // 16x oversampling baud clock enable
-    input  logic [7:0] tx_data,        // 8-bit data to transmit
-    input  logic       tx_start,       // Start transmission pulse (from register/FIFO pop)
-    input  logic [1:0] cfg_wls,        // Word length select: 00=5b, 01=6b, 10=7b, 11=8b
-    input  logic       cfg_stb,        // Stop bit select: 0=1 stop bit, 1=1.5 or 2 stop bits
-    input  logic       cfg_pen,        // Parity enable
-    input  logic       cfg_eps,        // Even parity select (0=odd, 1=even)
-    input  logic       cfg_bc,         // Break control (force TXD low)
-    output logic       txd,            // Serial output line
-    output logic       tx_busy,        // Transmitter busy indicator
-    output logic       tx_done         // Single-cycle transmission done pulse
+    input  logic       clk,
+    input  logic       rst_n,
+    input  logic       bclk_en,
+    input  logic [7:0] tx_data,
+    input  logic       tx_start,
+    input  logic [1:0] cfg_wls,
+    input  logic       cfg_stb,
+    input  logic       cfg_pen,
+    input  logic       cfg_eps,
+    input  logic       cfg_bc,
+    output logic       txd,
+    output logic       tx_busy,
+    output logic       tx_done
 );
 
-    // FSM States
     typedef enum logic [2:0] {
         ST_IDLE,
         ST_START,
@@ -36,28 +25,24 @@ module uart_tx (
 
     state_t state;
     
-    // Internal Registers
     logic [7:0] shift_reg;
-    logic [5:0] bclk_count; // Counts up to 32 ticks for STOP bit
+    logic [5:0] bclk_count;
     logic [2:0] bit_count;
     logic       parity_bit;
     logic       serial_out;
 
-    // Configurable parameters
     logic [2:0] max_bit_index;
     logic [5:0] stop_bit_ticks;
 
-    // Determine bit length index (number of data bits - 1)
     always_comb begin
         case (cfg_wls)
-            2'b00:   max_bit_index = 3'd4; // 5 bits
-            2'b01:   max_bit_index = 3'd5; // 6 bits
-            2'b10:   max_bit_index = 3'd6; // 7 bits
-            default: max_bit_index = 3'd7; // 8 bits
+            2'b00:   max_bit_index = 3'd4;
+            2'b01:   max_bit_index = 3'd5;
+            2'b10:   max_bit_index = 3'd6;
+            default: max_bit_index = 3'd7;
         endcase
     end
 
-    // Determine stop bit duration in BCLK cycles (16 BCLK ticks = 1 bit duration)
     always_comb begin
         if (cfg_stb) begin
             if (cfg_wls == 2'b00) begin
@@ -70,7 +55,6 @@ module uart_tx (
         end
     end
 
-    // Parity calculation logic
     always_comb begin
         logic temp_parity;
         case (cfg_wls)
@@ -81,16 +65,14 @@ module uart_tx (
         endcase
         
         if (cfg_eps) begin
-            parity_bit = temp_parity;       // Even Parity (XOR)
+            parity_bit = temp_parity;
         end else begin
-            parity_bit = ~temp_parity;      // Odd Parity (XNOR)
+            parity_bit = ~temp_parity;
         end
     end
 
-    // Break control overrides serial out
     assign txd = cfg_bc ? 1'b0 : serial_out;
 
-    // FSM Logic
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state        <= ST_IDLE;
@@ -116,7 +98,7 @@ module uart_tx (
                 end
 
                 ST_START: begin
-                    serial_out <= 1'b0; // START bit is low
+                    serial_out <= 1'b0;
                     if (bclk_en) begin
                         if (bclk_count == 6'd15) begin
                             bclk_count <= 6'd0;
@@ -161,7 +143,7 @@ module uart_tx (
                 end
 
                 ST_STOP: begin
-                    serial_out <= 1'b1; // STOP bit is high
+                    serial_out <= 1'b1;
                     if (bclk_en) begin
                         if (bclk_count == stop_bit_ticks - 6'd1) begin
                             bclk_count <= 6'd0;
